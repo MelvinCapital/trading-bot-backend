@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+metaapi-cloud-sdk
+pydantic
