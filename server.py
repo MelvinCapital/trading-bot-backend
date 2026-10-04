@@ -6,15 +6,21 @@ from metaapi_cloud_sdk import MetaApi
 
 app = FastAPI(title="MT5 Execution Bridge")
 
-# Retrieve API keys from environment variables
-API_TOKEN = os.getenv("API_TOKEN")
-ACCOUNT_ID = os.getenv("ACCOUNT_ID")
+# Declare global MetaApi instance
+api = None
 
-if not API_TOKEN or not ACCOUNT_ID:
-    raise RuntimeError("API_TOKEN or ACCOUNT_ID environment variable is missing.")
+@app.on_event("startup")
+async def startup_event():
+    global api
+    # Retrieve API keys inside the running async loop
+    api_token = os.getenv("API_TOKEN")
+    account_id = os.getenv("ACCOUNT_ID")
 
-# Initialize MetaAPI SDK
-api = MetaApi(token=API_TOKEN)
+    if not api_token or not account_id:
+        raise RuntimeError("API_TOKEN or ACCOUNT_ID environment variable is missing.")
+
+    # Initialize MetaAPI SDK inside active event loop
+    api = MetaApi(token=api_token)
 
 class TradeRequest(BaseModel):
     symbol: str = "XAUUSD"
@@ -28,9 +34,13 @@ def root():
 
 @app.post("/execute")
 async def execute_trade(trade: TradeRequest):
+    account_id = os.getenv("ACCOUNT_ID")
+    if not api or not account_id:
+        raise HTTPException(status_code=500, detail="MetaApi SDK is not initialized.")
+
     try:
         # Retrieve MT5 account instance
-        account = await api.metatrader_account_api.get_account(ACCOUNT_ID)
+        account = await api.metatrader_account_api.get_account(account_id)
         
         # Ensure account connection is active
         if account.state != "DEPLOYED":
@@ -69,6 +79,5 @@ async def execute_trade(trade: TradeRequest):
             "action": action,
             "details": results
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
